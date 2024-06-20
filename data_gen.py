@@ -88,42 +88,68 @@ def generate_continuous_variables(binary_data, continuous_var_dim, noise_std=0.1
     return continuous_df
 
 
-if __name__ == "__main__":
-    # Define the structure of the Bayesian Network
-    structure = [
-        ('A', 'B'),
-        ('A', 'C'),
-        ('B', 'D'),
-        ('C', 'D'),
-        ('D', 'E'),
-        ('B', 'F'),
-        ('C', 'G'),
-        ('E', 'H'),
-        ('F', 'H'),
-        ('G', 'I'),
-        ('H', 'J'),
-    ]
+def generate_continuous_variables_simple(binary_data, continuous_var_dim, noise_std=0.1):
+    """
+    Generate continuous variables based on linear combinations and interaction terms.
 
-    # Define the CPDs (Conditional Probability Distributions)
-    cpds = {
-        'A': TabularCPD(variable='A', variable_card=2, values=[[0.5], [0.5]]),
-        'B': TabularCPD(variable='B', variable_card=2, values=[[0.8, 0.2], [0.2, 0.8]], evidence=['A'], evidence_card=[2]),
-        'C': TabularCPD(variable='C', variable_card=2, values=[[0.7, 0.3], [0.3, 0.7]], evidence=['A'], evidence_card=[2]),
-        'D': TabularCPD(variable='D', variable_card=2, values=[[0.9, 0.4, 0.6, 0.1], [0.1, 0.6, 0.4, 0.9]], evidence=['B', 'C'], evidence_card=[2, 2]),
-        'E': TabularCPD(variable='E', variable_card=2, values=[[0.95, 0.5], [0.05, 0.5]], evidence=['D'], evidence_card=[2]),
-        'F': TabularCPD(variable='F', variable_card=2, values=[[0.85, 0.3], [0.15, 0.7]], evidence=['B'], evidence_card=[2]),
-        'G': TabularCPD(variable='G', variable_card=2, values=[[0.9, 0.4], [0.1, 0.6]], evidence=['C'], evidence_card=[2]),
-        'H': TabularCPD(variable='H', variable_card=2, values=[[0.8, 0.5, 0.6, 0.3], [0.2, 0.5, 0.4, 0.7]], evidence=['E', 'F'], evidence_card=[2, 2]),
-        'I': TabularCPD(variable='I', variable_card=2, values=[[0.7, 0.2], [0.3, 0.8]], evidence=['G'], evidence_card=[2]),
-        'J': TabularCPD(variable='J', variable_card=2, values=[[0.9, 0.6], [0.1, 0.4]], evidence=['H'], evidence_card=[2]),
-    }
+    Parameters:
+    - binary_data: DataFrame containing binary samples.
+    - continuous_var_dim: Dimensionality of the continuous variable.
+    - noise_std: Standard deviation of the Gaussian noise added to the continuous variables (default is 0.1).
 
-    # Sample from the Bayesian Network
-    print("Building binary samples...")
-    binary_samples = create_and_sample_bayesian_network(structure, cpds, sample_size=10000)
+    Returns:
+    - continuous_data: DataFrame containing the continuous variables.
+    """
+    binary_vars = binary_data.values
+    num_samples, num_binary_vars = binary_vars.shape
+    
+    # Generate random weights for linear combinations and interaction terms
+    weights_linear = np.random.randn(num_binary_vars, continuous_var_dim)
+    weights_interaction = np.random.randn(num_binary_vars, num_binary_vars, continuous_var_dim)
+    
+    continuous_data = np.zeros((num_samples, continuous_var_dim))
+    
+    # Compute linear combinations
+    for i in range(continuous_var_dim):
+        continuous_data[:, i] += np.dot(binary_vars, weights_linear[:, i])
+        
+        # Compute interaction terms
+        for j in range(num_binary_vars):
+            for k in range(j+1, num_binary_vars):
+                continuous_data[:, i] += binary_vars[:, j] * binary_vars[:, k] * weights_interaction[j, k, i]
+    
+    # Add Gaussian noise to the generated continuous variables
+    continuous_data += np.random.normal(0, noise_std, continuous_data.shape)
+    
+    continuous_df = pd.DataFrame(continuous_data, columns=[f'Cont_Var_{i+1}' for i in range(continuous_var_dim)])
+    return continuous_df
 
-    # Generate continuous variables
-    print("\nBuilding continuous samples...")
-    continuous_samples = generate_continuous_variables(binary_samples[['H', 'I', 'J']], continuous_var_dim=20, noise_std=0.1)
-    print(continuous_samples.head())
-    import pdb; pdb.set_trace()
+def generate_continuous_variables_super_simple(binary_data, continuous_var_dim, noise_std=0.1):
+    """
+    Generate continuous variables based on linear combinations.
+
+    Parameters:
+    - binary_data: DataFrame containing binary samples.
+    - continuous_var_dim: Dimensionality of the continuous variable.
+    - noise_std: Standard deviation of the Gaussian noise added to the continuous variables (default is 0.1).
+
+    Returns:
+    - continuous_data: DataFrame containing the continuous variables.
+    """
+    binary_vars = binary_data.values
+    num_samples, num_binary_vars = binary_vars.shape
+    
+    # Generate random weights for linear combinations and interaction terms
+    weights_linear = np.random.randn(num_binary_vars, continuous_var_dim)
+    
+    continuous_data = np.zeros((num_samples, continuous_var_dim))
+    
+    # Compute linear combinations
+    for i in range(continuous_var_dim):
+        continuous_data[:, i] += np.dot(binary_vars, weights_linear[:, i])
+        
+    # Add Gaussian noise to the generated continuous variables
+    continuous_data += np.random.normal(0, noise_std, continuous_data.shape)
+    
+    continuous_df = pd.DataFrame(continuous_data, columns=[f'Cont_Var_{i+1}' for i in range(continuous_var_dim)])
+    return continuous_df
