@@ -80,7 +80,7 @@ def generate_continuous_variables(binary_data, continuous_var_dim, noise_std=0.1
     with torch.no_grad():
         inputs = torch.tensor(binary_vars, dtype=torch.float32)
         outputs = model(inputs).numpy()
-    
+
     # Add Gaussian noise to the generated continuous variables
     continuous_data = outputs + np.random.normal(0, noise_std, outputs.shape)
     
