@@ -20,8 +20,6 @@ class BinaryVAE(nn.Module):
         # Encoder
         self.fc1 = nn.Linear(input_dim, latent_dim)
         self.fc2 = nn.Linear(latent_dim, input_dim)
-
-        self.sigmoid = torch.sigmoid
         
     def forward(self, x):
         latents = torch.sigmoid(self.fc1(x))

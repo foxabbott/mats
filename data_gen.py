@@ -141,9 +141,10 @@ def generate_continuous_variables_super_simple(binary_data, continuous_var_dim, 
     
     # Generate random weights for linear combinations and interaction terms
     weights_linear = np.random.randn(num_binary_vars, continuous_var_dim)
-    
+    # weights_linear = np.abs(np.random.normal(loc=0, 
+    #                                          scale=1000, 
+    #                                          size=(num_binary_vars, continuous_var_dim)))
     continuous_data = np.zeros((num_samples, continuous_var_dim))
-    
     # Compute linear combinations
     for i in range(continuous_var_dim):
         continuous_data[:, i] += np.dot(binary_vars, weights_linear[:, i])
