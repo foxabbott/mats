@@ -148,9 +148,19 @@ def generate_continuous_variables_super_simple(binary_data, continuous_var_dim, 
     # Compute linear combinations
     for i in range(continuous_var_dim):
         continuous_data[:, i] += np.dot(binary_vars, weights_linear[:, i])
-        
+
+    # Create weights for each bit position
+    weights = 2 ** torch.arange(binary_vars.shape[1] - 1, -1, -1, dtype=torch.float32)
+
+    # Compute dot product of each row with weights
+    decimal_values = torch.matmul(torch.tensor(binary_vars).float(), weights)
+
+    # Convert to integer
+    decimal_values = decimal_values.long()
+
     # Add Gaussian noise to the generated continuous variables
     continuous_data += np.random.normal(0, noise_std, continuous_data.shape)
-    
+
     continuous_df = pd.DataFrame(continuous_data, columns=[f'Cont_Var_{i+1}' for i in range(continuous_var_dim)])
-    return continuous_df
+    # return continuous_df
+    return pd.DataFrame(decimal_values)

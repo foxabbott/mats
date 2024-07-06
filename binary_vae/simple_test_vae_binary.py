@@ -166,7 +166,7 @@ class MediumBinaryVAE(BaseVAE):
         return x_recon
 
 
-def loss_function(x_recon, x, probs, beta=1.0):
+def loss_function(x_recon, x, probs, beta=1.0, gamma=1.0):
     BCE = F.mse_loss(x_recon, x, reduction='sum') / x.shape[1] # Reconstruction loss
     # dividing by x.shape[1] so that relative magnitudes of the two terms remain similar for different latent space dimensions
 
@@ -180,21 +180,22 @@ def loss_function(x_recon, x, probs, beta=1.0):
     # probs_mean = probs.mean(dim=0)
     # variance_penalty = (probs_mean - 0.5).pow(2).sum()
 
-    # print(f"BCE: {BCE}, KLD: {KLD}, Var: {variance_penalty}")
     
     # Sparsity loss
-    # avg_activation = probs.mean(dim=0)
+    avg_activation = probs.mean()
+    print(f"BCE: {BCE}, KLD: {beta * KLD}, Avg: {gamma * avg_activation}")
     # target_sparsity = 0.1
     # kl_div = target_sparsity * torch.log(target_sparsity / avg_activation) + \
-    #          (1 - target_sparsity) * torch.log((1 - target_sparsity) / (1 - avg_activation))
+            #  (1 - target_sparsity) * torch.log((1 - target_sparsity) / (1 - avg_activation))
     # sparsity_loss = kl_div.sum()
 
-    return BCE + beta * KLD
+    # return BCE + beta * KLD
     # return BCE + beta * entropy
     # return BCE + beta * KLD + 100 * variance_penalty
+    return BCE + beta * KLD + gamma * avg_activation
 
 def train_vae(model, cts_data, bin_data, epochs=100, batch_size=256, learning_rate=1e-3, beta=1.0, 
-              clip_grads=False, anneal_beta=False):
+              clip_grads=False, anneal_beta=False, gamma=1.0):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     # scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=lr, max_lr=lr*10, step_size_up=1000, mode='triangular2', cycle_momentum=False)
 
@@ -212,7 +213,7 @@ def train_vae(model, cts_data, bin_data, epochs=100, batch_size=256, learning_ra
             x = x.to(device)
             optimizer.zero_grad()
             x_recon, probs = model(x, y)
-            loss = loss_function(x_recon, x, probs, beta_epoch)
+            loss = loss_function(x_recon, x, probs, beta_epoch, gamma)
             loss.backward()
             if clip_grads:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -242,9 +243,8 @@ def plot_encoded_vars(data, epoch):
         plt.plot(encodings['input'], encodings[column], label=f'Encoding {column}')
     for value in [pd.DataFrame(data).value_counts().index[i][0] for i in range(len(pd.DataFrame(data).value_counts().index))] :
         plt.axvline(x=value, color='r', linestyle='--', linewidth=1)
-    plt.savefig(f"plots/simple_run/{epoch}.jpg")
+    plt.savefig(f"binary_vae/plots/simple_run/{epoch}.jpg")
     plt.close()
-
 
 def init_weights(m):
     if type(m) == nn.Linear:
@@ -257,23 +257,26 @@ if __name__ == "__main__":
     structure = []
 
     # Define the CPDs (Conditional Probability Distributions)
-    activation_prob = 0.5
-    binary_var_names = ['H', 'I', 'J']
-    # binary_var_names = ['A', 'B', 'C', 'D', 'E']
+    activation_prob = 0.2
+    # binary_var_names = ['H', 'I', 'J']
+    binary_var_names = ['A', 'B', 'C', 'D', 'E']
     # binary_var_names = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-    cpds = {name: TabularCPD(variable=name, variable_card=2, values=[[activation_prob], 
-                                                                     [1-activation_prob]]) for name in binary_var_names}
- 
+    cpds = {name: TabularCPD(variable=name, variable_card=2, values=[[1-activation_prob], 
+                                                                     [activation_prob]]) for name in binary_var_names}
+
     # Sample from the Bayesian Network
     print("Building binary samples...")
     sample_size = 10000
     binary_samples = create_and_sample_bayesian_network(structure, cpds, sample_size=sample_size)
+    
+    # Hacky sparsifying
+    binary_samples = binary_samples[binary_samples.sum(axis=1) < 4]
     binary_data_tensor = torch.tensor(binary_samples.values, dtype=torch.float32).to(device)
 
     # Generate continuous variables
     print("\nBuilding continuous samples...")
     noise_std = 0
-    continuous_var_dim = 3
+    continuous_var_dim = 5
     # cts_data_func = generate_continuous_variables 
     # cts_data_func = generate_continuous_variables_simple
     cts_data_func = generate_continuous_variables_super_simple
@@ -288,17 +291,18 @@ if __name__ == "__main__":
 
     continuous_data_tensor = torch.tensor(continuous_samples.values, dtype=torch.float32).to(device)
     input_dim = continuous_data_tensor.shape[1]
-    # latent_dim = binary_samples.shape[1]
     latent_dim = len(binary_var_names)
+    # latent_dim = 100
     model_type = SuperSimpleBinaryVAE
     # model_type = SimpleBinaryVAE
     # model_type = MediumBinaryVAE
     lr = 1e-3
-    beta = 0.1
-    anneal_beta = True
+    beta = 1.0
+    anneal_beta = False
     clip_grads = False
     epochs = 200
-    hidden_dim = 2**9
+    hidden_dim = 2**7
+    gamma = 10.0
 
     model = model_type(input_dim, hidden_dim, latent_dim).to(device)
     # model.apply(init_weights)
@@ -308,7 +312,7 @@ if __name__ == "__main__":
 
     train_vae(model, continuous_data_tensor, binary_data_tensor, epochs=epochs, 
             learning_rate=lr, beta=beta, clip_grads=clip_grads,
-            anneal_beta=anneal_beta)
+            anneal_beta=anneal_beta, gamma=gamma)
 
     # Set the model to evaluation mode
     model.eval()
